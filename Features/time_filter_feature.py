@@ -1,10 +1,8 @@
 from flask import Blueprint, request, jsonify
 
-# --- UPDATED IMPORTS ---
-from extensions import db
+# from extensions import db
 from models import Program, ClassSchedule
 
-# ------------------------
 
 time_filter_bp = Blueprint('time_filter', __name__)
 
@@ -12,7 +10,7 @@ time_filter_bp = Blueprint('time_filter', __name__)
 @time_filter_bp.route('/get_class_by_time')
 def get_class_by_time():
     """
-    Finds a specific class based on Program Name, Section, and Time Slot.
+    Finding a specific class based on Program Name, Section, and Time Slot.
     """
     program_name = request.args.get('program')
     section = request.args.get('section')
@@ -35,7 +33,7 @@ def get_class_by_time():
         ).first()
 
         if cls:
-            # Convert the DB object to a dictionary for JSON
+            # Convert the DB object to a dictionary
             found_class = {
                 "Day": cls.day,
                 "Time": cls.time_slot,
