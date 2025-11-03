@@ -50,6 +50,15 @@
         </div>
 
         <div class="col-md-7">
+
+            <div class="card mb-4">
+                <div class="card-body text-center">
+                    <h5 class="card-title">Room Management</h5>
+                    <p class="card-text">Add or update room locations (building/floor).</p>
+                    <a href="{{ url_for('admin.manage_rooms') }}" class="btn btn-secondary">Manage Room Locations</a>
+                </div>
+            </div>
+
             <div class="card">
                 <div class="card-header">1. Update Existing Program</div>
                 <div class="card-body">
@@ -84,7 +93,7 @@
                             <label for="new_file" class="form-label">Timetable File (.docx)</label>
                             <input class="form-control" type="file" id="new_file" name="timetable_file" accept=".docx" required>
                         </div>
-                        <button type="submit" class="btn btn-success w-100">Add New Program</D>
+                        <button type="submit" class="btn btn-success w-100">Add New Program</button>
                     </form>
                 </div>
             </div>
