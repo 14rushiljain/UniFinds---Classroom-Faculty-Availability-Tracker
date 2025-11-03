@@ -1,20 +1,26 @@
 from flask import Blueprint, request, render_template, redirect, url_for, session, flash
 import io
+import csv
+import json
+import os  # Make sure 'os' is imported
 from datetime import datetime
-
-# --- THIS IS THE FIX ---
-# Import from the new files, NOT from app.py
 from extensions import db
 from models import Program, ClassSchedule
-# ------------------------
-
-# Our parsing logic is in a separate file, which is good practice
 from data_processing import parse_timetables_with_headers
 
 admin_bp = Blueprint('admin', __name__, url_prefix='/admin')
-
 ADMIN_PASSWORD = "admin123"
 
+# --- THIS IS THE FIX ---
+# Get the full path of the current file's directory (e.g., .../features)
+current_dir = os.path.dirname(os.path.abspath(__file__))
+# Go up one level to get the project's root directory
+project_root = os.path.dirname(current_dir)
+# Define the path to locations.json in the root
+LOCATION_FILE = os.path.join(project_root, 'locations.json')
+
+
+# ------------------------
 
 @admin_bp.route('/', methods=['GET', 'POST'])
 def login():
@@ -138,3 +144,69 @@ def update_existing():
 def logout():
     session.pop('admin_logged_in', None)
     return redirect(url_for('admin.login'))
+
+
+# --- NEW ROUTES FOR ROOM LOCATION MANAGEMENT ---
+
+@admin_bp.route('/manage_rooms', methods=['GET'])
+def manage_rooms():
+    """
+    Shows the new page for managing room locations.
+    It loads the current locations from the JSON file to display them.
+    """
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin.login'))
+
+    current_locations = {}
+    try:
+        with open(LOCATION_FILE, 'r') as f:
+            current_locations = json.load(f)
+    except FileNotFoundError:
+        pass  # It's okay if the file doesn't exist yet
+
+    # We pass the dictionary's items to the template so we can loop
+    return render_template('admin_rooms.html', locations=current_locations.items())
+
+
+@admin_bp.route('/upload_rooms_csv', methods=['POST'])
+def upload_rooms_csv():
+    """
+    Handles the .csv file upload. Reads the CSV, converts it to JSON,
+    and saves it as locations.json.
+    """
+    if not session.get('admin_logged_in'):
+        return redirect(url_for('admin.login'))
+
+    file = request.files.get('room_file')
+    if not file or not file.filename.endswith('.csv'):
+        flash('A .csv file is required.', 'danger')
+        return redirect(url_for('admin.manage_rooms'))
+
+    room_directory = {}
+    try:
+        # Read the file as a string
+        file.stream.seek(0)
+        stream = io.StringIO(file.stream.read().decode("UTF-8"), newline=None)
+
+        # Use csv.DictReader to read the CSV rows as dictionaries
+        csv_reader = csv.DictReader(stream)
+
+        for row in csv_reader:
+            room_name = row.get('room_name')
+            if room_name:
+                # Store the location details, keyed by the room_name
+                room_directory[room_name] = {
+                    "building": row.get('building'),
+                    "floor": row.get('floor')
+                }
+
+        # Write the new directory to the locations.json file
+        with open(LOCATION_FILE, 'w') as f:
+            json.dump(room_directory, f, indent=4)
+
+        flash('Room Directory updated successfully!', 'success')
+
+    except Exception as e:
+        flash(f'An error occurred: {e}', 'danger')
+
+    return redirect(url_for('admin.manage_rooms'))
