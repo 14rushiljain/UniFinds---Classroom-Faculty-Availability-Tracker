@@ -15,28 +15,25 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///' + os.path.join(basedir, 'un
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # --- 3. Initialize db with the app ---
-# This connects the 'db' object from extensions.py to *this* app
+# connection bw db and extensions
 db.init_app(app)
 
 # --- 4. Import and Register Blueprints ---
-#
-# This is now SAFE. Why?
-# Because the feature files will import from 'extensions.py' and 'models.py',
-# NOT from this 'app.py' file. The loop is broken.
-#
 from features.admin_feature import admin_bp
 from features.search_feature import search_bp
 from features.time_filter_feature import time_filter_bp
 from features.free_room_finder_feature import free_room_bp
+from features.location_feature import location_bp  # <-- 1. IMPORT NEW BLUEPRINT
 
 app.register_blueprint(admin_bp)
 app.register_blueprint(search_bp)
 app.register_blueprint(time_filter_bp)
 app.register_blueprint(free_room_bp)
+app.register_blueprint(location_bp)  # <-- 2. REGISTER NEW BLUEPRINT
 
 
 # --- 5. Core API Routes (for the User Dashboard) ---
-# These are unchanged.
+
 @app.route('/')
 def index():
     """Renders the main HTML page for students."""
@@ -45,10 +42,7 @@ def index():
 
 @app.route('/get_initial_data')
 def get_initial_data():
-    """
-    Called when the page loads. Gets all programs, days, and times
-    from the database to fill the filters.
-    """
+
     try:
         programs_from_db = db.session.query(Program.name).distinct().all()
         times_from_db = db.session.query(ClassSchedule.time_slot).distinct().all()
