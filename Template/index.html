@@ -13,6 +13,7 @@
         .schedule-card, .search-result-card { background-color: #ffffff; border: 1px solid #e9ecef; border-radius: 0.5rem; padding: 1.25rem; margin-bottom: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.04); }
         .card-item { font-size: 0.9rem; color: #6c757d; }
         .card-item strong { color: #212529; }
+        .card-location { font-size: 0.9rem; color: #495057; }
         .free-room-badge { font-size: 0.95rem; font-weight: 500; padding: 0.5em 0.75em; }
     </style>
 </head>
@@ -41,12 +42,20 @@
                     <select id="time-select" class="form-select" disabled><option>Select Time</option></select>
                 </div>
             </div>
-            <div class="row g-2 mt-2">
-                <div class="col-md-12">
+            <div class="row g-2 mt-2 align-items-center">
+                <div class="col-md-6">
                      <form id="search-form" class="input-group">
                         <input type="search" id="search-input" class="form-control" placeholder="Search for any subject..." disabled>
                         <button class="btn btn-outline-secondary" type="submit" id="search-button" disabled>Search</button>
                     </form>
+                </div>
+                <div class="col-md-4">
+                    <input class="form-control" list="room-list-options" id="room-input" placeholder="Type or select a room to find..." disabled>
+                    <datalist id="room-list-options">
+                        </datalist>
+                </div>
+                <div class="col-md-2">
+                    <button id="save-schedule-btn" class="btn btn-success w-100" disabled>Save</button>
                 </div>
             </div>
         </div>
@@ -65,46 +74,124 @@
     const searchForm = document.getElementById('search-form');
     const searchInput = document.getElementById('search-input');
     const searchButton = document.getElementById('search-button');
+    const roomInput = document.getElementById('room-input');
+    const roomDatalist = document.getElementById('room-list-options');
+    const saveButton = document.getElementById('save-schedule-btn');
     const displayDiv = document.getElementById('schedule-display');
     const infoText = document.getElementById('info-text');
 
-    // --- Event Listeners ---
+    // --- Global variable to hold room locations ---
+    let roomDirectory = {};
+
+    // --- Event Listeners (FIXED) ---
     document.addEventListener('DOMContentLoaded', loadInitialData);
-    programSelect.addEventListener('change', loadSections);
-    sectionSelect.addEventListener('change', fetchAndDisplaySchedule);
-    daySelect.addEventListener('change', fetchAndDisplaySchedule);
+    programSelect.addEventListener('change', onProgramChange); // <-- UPDATED
+    sectionSelect.addEventListener('change', onSectionChange); // <-- UPDATED
+    daySelect.addEventListener('change', fetchAndDisplaySchedule); // This was correct
     timeSelect.addEventListener('change', fetchClassAndFreeRooms);
     searchForm.addEventListener('submit', handleSearch);
+    roomInput.addEventListener('change', showRoomLocation);
+    saveButton.addEventListener('click', saveSchedule);
 
     // --- Functions ---
 
-    /**
-     * Called on page load. Fetches all programs, days, and time slots
-     * from the database to populate the main filters.
-     */
     async function loadInitialData() {
         try {
-            const response = await fetch('/get_initial_data');
-            const data = await response.json();
+            const [dataResponse, locationResponse] = await Promise.all([
+                fetch('/get_initial_data'),
+                fetch('/get_all_locations')
+            ]);
+
+            if (!dataResponse.ok || !locationResponse.ok) {
+                throw new Error('Failed to fetch initial data.');
+            }
+
+            const data = await dataResponse.json();
+            roomDirectory = await locationResponse.json();
+
+            const roomNames = Object.keys(roomDirectory).sort();
+            roomDatalist.innerHTML = '';
+            roomNames.forEach(room => {
+                const option = document.createElement('option');
+                option.value = room;
+                roomDatalist.appendChild(option);
+            });
 
             populateDropdown(programSelect, data.programs, 'Select Program');
             populateDropdown(daySelect, data.days, 'Select Day');
             populateDropdown(timeSelect, data.time_slots, 'Select Time');
 
-            // Enable search
             searchInput.disabled = false;
             searchButton.disabled = false;
-            infoText.textContent = 'Please select a program and section to view schedules.';
+            roomInput.disabled = false;
+
+            await loadSavedSchedule();
 
         } catch (error) {
+            console.error('Error loading initial data:', error);
             infoText.textContent = 'Failed to load initial data. Please reload the page.';
         }
     }
 
+    async function loadSavedSchedule() {
+        const savedProgram = localStorage.getItem('myProgram');
+        const savedSection = localStorage.getItem('mySection');
+
+        if (savedProgram) {
+            programSelect.value = savedProgram;
+
+            // Load sections *before* trying to set the section value
+            await loadSections();
+
+            if (savedSection && sectionSelect.querySelector(`option[value="${savedSection}"]`)) {
+                sectionSelect.value = savedSection;
+                saveButton.textContent = "Saved!";
+            }
+
+            const today = new Date().toLocaleString('en-US', { weekday: 'short' });
+            if (daySelect.querySelector(`option[value="${today}"]`)) {
+                daySelect.value = today;
+            }
+
+            await fetchAndDisplaySchedule();
+
+        } else {
+            infoText.textContent = 'Please select a program and section to view schedules.';
+        }
+
+        saveButton.disabled = false;
+    }
+
+    function saveSchedule() {
+        const selectedProgram = programSelect.value;
+        const selectedSection = sectionSelect.value;
+
+        if (selectedProgram && selectedSection) {
+            localStorage.setItem('myProgram', selectedProgram);
+            localStorage.setItem('mySection', selectedSection);
+            saveButton.textContent = "Saved!";
+            saveButton.blur();
+        } else {
+            alert("Please select both a program and a section before saving.");
+        }
+    }
+
     /**
-     * Called when a Program is selected. Fetches all sections
-     * for that specific program.
+     * NEW: Runs when Program selection changes.
      */
+     function onProgramChange() {
+        saveButton.textContent = "Save"; // Reset button text
+        loadSections(); // Load the sections for the new program
+     }
+
+    /**
+     * NEW: Runs when Section selection changes.
+     */
+     function onSectionChange() {
+        saveButton.textContent = "Save"; // Reset button text
+        fetchAndDisplaySchedule(); // Load the schedule for the new section
+     }
+
     async function loadSections() {
         const selectedProgram = programSelect.value;
         if (!selectedProgram) {
@@ -112,7 +199,6 @@
             sectionSelect.disabled = true;
             return;
         }
-
         try {
             const response = await fetch(`/get_sections_for_program?program=${selectedProgram}`);
             const sections = await response.json();
@@ -134,25 +220,26 @@
         selectElement.disabled = false;
     }
 
-    /**
-     * Fetches and displays the full schedule for the selected
-     * Program, Section, and Day.
-     */
     async function fetchAndDisplaySchedule() {
-        timeSelect.value = ""; // Reset time selector
+        timeSelect.value = "";
+        roomInput.value = "";
+        searchInput.value = "";
+
         const selectedProgram = programSelect.value;
         const selectedSection = sectionSelect.value;
         const selectedDay = daySelect.value;
 
-        if (!selectedProgram || !selectedSection || !selectedDay) return;
+        if (!selectedProgram || !selectedSection || !selectedDay) {
+            displayDiv.innerHTML = `<p class="text-center text-muted mt-5">Please select a program, section, and day.</p>`;
+            return;
+        }
 
         try {
-
             const response = await fetch(`/get_day_schedule?program=${selectedProgram}&section=${selectedSection}&day=${selectedDay}`);
             const schedule = await response.json();
             if (schedule.error) throw new Error(schedule.error);
 
-            let html = `<h3 class="day-header">${selectedDay} Schedule</h3>`;
+            let html = `<h3 class="day-header">${selectedDay}'s Schedule (${selectedProgram} - ${selectedSection})</h3>`;
             if (schedule.length === 0) {
                 html += '<p class="text-muted">No classes scheduled for this day.</p>';
             } else {
@@ -164,18 +251,16 @@
         }
     }
 
-    /**
-     * Fetches the specific class and all free rooms
-     * for the selected Program and Time.
-     */
     async function fetchClassAndFreeRooms() {
+        roomInput.value = "";
+        searchInput.value = "";
+
         const selectedProgram = programSelect.value;
         const selectedSection = sectionSelect.value;
         const selectedTime = timeSelect.value;
 
-        // Don't run if time is un-selected
         if (!selectedTime) {
-            fetchAndDisplaySchedule(); // Revert to day view
+            fetchAndDisplaySchedule();
             return;
         }
 
@@ -184,7 +269,6 @@
             return;
         }
 
-        // Create promises for both API calls
         const classPromise = fetch(`/get_class_by_time?program=${selectedProgram}&section=${selectedSection}&time=${selectedTime}`);
         const freeRoomsPromise = fetch(`/get_free_rooms?time=${selectedTime}`);
 
@@ -221,16 +305,37 @@
     }
 
     function createCardHtml(cls) {
+        let locationHtml = '';
+        if (cls.Room && roomDirectory[cls.Room]) {
+            const loc = roomDirectory[cls.Room];
+            const building = loc.building || '';
+            const floor = loc.floor || '';
+
+            if(building || floor) {
+                locationHtml = `
+                    <p class="card-item mb-0 card-location"><strong class="me-2">Location:</strong>
+                        ${building} ${building && floor ? '-' : ''} ${floor}
+                    </p>
+                `;
+            }
+        }
+
         return `
             <div class="schedule-card">
                 <p class="card-item mb-1"><strong class="me-2">Time:</strong> ${cls.Time}</p>
                 <p class="card-item mb-1"><strong class="me-2">Subject:</strong> ${cls.Subject}</p>
-                <p class="card-item mb-0"><strong class="me-2">Room:</strong> ${cls.Room}</p>
+                <p class="card-item mb-1"><strong class="me-2">Room:</strong> ${cls.Room}</p>
+                ${locationHtml}
             </div>`;
     }
 
     async function handleSearch(event) {
         event.preventDefault();
+
+        daySelect.value = "";
+        timeSelect.value = "";
+        roomInput.value = "";
+
         const query = searchInput.value;
         if (!query) return;
         try {
@@ -243,13 +348,25 @@
                 html += '<p class="text-muted">No matching subjects found.</p>';
             } else {
                  results.forEach(cls => {
+                    let locationHtml = '';
+                    if (cls.Room && roomDirectory[cls.Room]) {
+                        const loc = roomDirectory[cls.Room];
+                        const building = loc.building || '';
+                        const floor = loc.floor || '';
+                        if(building || floor) {
+                            locationHtml = `<p class="card-item mb-0 card-location"><strong class="me-2">Location:</strong> ${building} ${building && floor ? '-' : ''} ${floor}</p>`;
+                        }
+                    }
+
                     html += `
                         <div class="search-result-card">
                             <p class="card-item mb-1"><strong class="me-2">Subject:</strong> ${cls.Subject}</p>
                             <p class="card-item mb-1"><strong class="me-2">Program:</strong> ${cls.Program}</p>
                             <p class="card-item mb-1"><strong class="me-2">Section:</strong> ${cls.Section}</p>
                             <p class="card-item mb-1"><strong class="me-2">Day:</strong> ${cls.Day}</p>
-                            <p class="card-item mb-0"><strong class="me-2">Room:</strong> ${cls.Room}</p>
+                            <p class="card-item mb-1"><strong class="me-2">Time:</strong> ${cls.Time}</p>
+                            <p class="card-item mb-1"><strong class="me-2">Room:</strong> ${cls.Room}</p>
+                            ${locationHtml}
                         </div>`;
                 });
             }
@@ -258,6 +375,39 @@
             displayDiv.innerHTML = `<p class="text-center text-danger mt-5">Search failed: ${error.message}</p>`;
         }
     }
+
+    function showRoomLocation() {
+        const selectedRoom = roomInput.value;
+        if (!selectedRoom) return;
+
+        if (!roomDirectory[selectedRoom]) {
+            displayDiv.innerHTML = `<p class="text-center text-muted mt-5">Room "${selectedRoom}" not found in directory.</p>`;
+            return;
+        }
+
+        daySelect.value = "";
+        timeSelect.value = "";
+        searchInput.value = "";
+
+        const location = roomDirectory[selectedRoom];
+
+        let html = `<h3 class="day-header">Location for ${selectedRoom}</h3>`;
+
+        if (location && (location.building || location.floor)) {
+            html += `
+                <div class="schedule-card">
+                    <p class="card-item mb-1"><strong class="me-2">Room:</strong> ${selectedRoom}</p>
+                    <p class="card-item mb-1"><strong class="me-2">Building:</strong> ${location.building || 'N/A'}</p>
+                    <p class="card-item mb-0"><strong class="me-2">Floor:</strong> ${location.floor || 'N/A'}</p>
+                </div>
+            `;
+        } else {
+            html += `<p class="text-muted">Location details are not available for this room. Please ask the admin to add it.</p>`;
+        }
+
+        displayDiv.innerHTML = html;
+    }
+
 </script>
 </body>
 </html>
