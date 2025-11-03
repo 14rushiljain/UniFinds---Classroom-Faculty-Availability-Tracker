@@ -4,8 +4,6 @@ from flask import Blueprint, request, jsonify
 from extensions import db
 from models import Program, ClassSchedule
 
-# ------------------------
-
 free_room_bp = Blueprint('free_room_finder', __name__)
 
 
