@@ -1,6 +1,5 @@
 from flask import Blueprint, request, jsonify
 
-# --- UPDATED IMPORTS ---
 # Import from the new files, NOT from app.py
 from extensions import db
 from models import Program, ClassSchedule
