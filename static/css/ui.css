@@ -1,32 +1,37 @@
+/*
+ * By adding '#my-app' to all rules, we make them
+ * more specific than Bootstrap's default rules.
+ * This forces the browser to use our styles.
+ */
 
-
-body {
+#my-app body {
+    /* We target '#my-app body' instead of just 'body' */
     background: #f5f8fc;
     font-family: 'Segoe UI', Tahoma, sans-serif;
     color: #333;
 }
 
-.navbar-custom {
+#my-app .navbar-custom {
     background-color: #004aad;
 }
 
-.navbar-custom .navbar-brand,
-.navbar-custom .nav-link {
-    color: white !important;
+#my-app .navbar-custom .navbar-brand,
+#my-app .navbar-custom .nav-link {
+    color: white !important; /* Kept !important as it's fighting a very specific Bootstrap rule */
     font-weight: 500;
 }
 
-.navbar-custom .nav-link:hover {
+#my-app .navbar-custom .nav-link:hover {
     color: #d9e6ff !important;
 }
 
-.main-container {
+#my-app .main-container {
     max-width: 1200px;
     margin: 2rem auto;
     padding: 1rem;
 }
 
-.custom-card {
+#my-app .custom-card {
     background: white;
     padding: 1.5rem;
     border-radius: 12px;
@@ -34,48 +39,54 @@ body {
     margin-bottom: 2rem;
 }
 
-.custom-card h2 {
+#my-app .custom-card h2 {
     color: #004aad;
     margin-bottom: 1rem;
 }
 
-.btn-custom {
+/* This targets your button AND Bootstrap's default .btn */
+#my-app .btn-custom,
+#my-app .btn {
     background-color: #1a73e8;
     color: white;
     border-radius: 6px;
     padding: 0.6rem 1.2rem;
     transition: 0.2s;
+    border: none; /* Add this to override Bootstrap's default border */
 }
 
-.btn-custom:hover {
+#my-app .btn-custom:hover,
+#my-app .btn:hover {
     background-color: #145ec2;
+    color: white; /* Ensure hover text stays white */
 }
 
-.table-custom {
+#my-app .table-custom {
     width: 100%;
     border-collapse: collapse;
 }
 
-.table-custom th {
+#my-app .table-custom th {
     background-color: #e4efff;
     color: #004aad;
     padding: 0.8rem;
 }
 
-.table-custom td {
+#my-app .table-custom td {
     padding: 0.8rem;
     border-bottom: 1px solid #ddd;
 }
 
-.free-row {
+#my-app .free-row {
     background-color: #e9ffe9;
 }
 
-.occupied-row {
+#my-app .occupied-row {
     background-color: #fff2e6;
 }
 
 /* ---------- FOOTER ---------- */
+/* Footer is outside the #my-app body, so it doesn't get the prefix */
 footer {
     background: #004aad;
     color: white;
